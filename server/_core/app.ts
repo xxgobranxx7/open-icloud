@@ -19,14 +19,30 @@ export function createExpressApp() {
   registerWhatsAppProxy(app);
   registerWhatsAppSendProxy(app);
 
-  // tRPC API
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext,
-    })
-  );
+  // Health check endpoint
+  app.get(["/api/health", "/health"], (req, res) => {
+    res.json({ ok: true, status: "healthy", timestamp: Date.now() });
+  });
+
+  // tRPC API - mounted on both /api/trpc and /trpc
+  const trpcMiddleware = createExpressMiddleware({
+    router: appRouter,
+    createContext,
+  });
+
+  app.use("/api/trpc", trpcMiddleware);
+  app.use("/trpc", trpcMiddleware);
+
+  // Fallback 404 handler for unmatched routes
+  app.use((req, res) => {
+    res.status(404).json({ error: "Route not found", path: req.url });
+  });
+
+  // Global error handler so requests never hang
+  app.use((err: any, req: any, res: any, next: any) => {
+    console.error("[Express Error]:", err);
+    res.status(500).json({ error: err?.message || "Internal server error" });
+  });
 
   return app;
 }
